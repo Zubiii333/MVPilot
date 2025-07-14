@@ -1,0 +1,562 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  firstName         String
+  lastName          String
+  role              UserRole @default(RECRUITER)
+  department        String?
+  isActive          Boolean  @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  jobRequisitions   JobRequisition[]
+  interviews        Interview[]
+  candidateNotes    CandidateNote[]
+  timeTracking      TimeTracking[]
+  approvals         Approval[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  HR_MANAGER
+  RECRUITER
+  HIRING_MANAGER
+  INTERVIEWER
+}
+
+// Job Management
+model JobRequisition {
+  id                String   @id @default(cuid())
+  title             String
+  department        String
+  location          String
+  jobType           JobType
+  experienceLevel   ExperienceLevel
+  salaryRange       String?
+  description       String
+  requirements      String
+  responsibilities  String
+  status            RequisitionStatus @default(DRAFT)
+  priority          Priority @default(MEDIUM)
+  hiringManagerId   String
+  recruiterId       String
+  budget            Decimal?
+  headcount         Int @default(1)
+  deadline          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  hiringManager     User @relation("HiringManager", fields: [hiringManagerId], references: [id])
+  recruiter         User @relation("Recruiter", fields: [recruiterId], references: [id])
+  jobPostings       JobPosting[]
+  candidates        Candidate[]
+  approvals         Approval[]
+
+  @@map("job_requisitions")
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum ExperienceLevel {
+  ENTRY
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  PRINCIPAL
+}
+
+enum RequisitionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CLOSED
+  ON_HOLD
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Approval Workflow
+model Approval {
+  id                String   @id @default(cuid())
+  requisitionId     String
+  approverId        String
+  status            ApprovalStatus @default(PENDING)
+  comments          String?
+  approvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  requisition       JobRequisition @relation(fields: [requisitionId], references: [id])
+  approver          User @relation(fields: [approverId], references: [id])
+
+  @@map("approvals")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Job Posting
+model JobPosting {
+  id                String   @id @default(cuid())
+  requisitionId     String
+  title             String
+  description       String
+  requirements      String
+  location          String
+  jobType           JobType
+  salaryRange       String?
+  isActive          Boolean  @default(true)
+  publishedAt       DateTime?
+  expiresAt         DateTime?
+  externalJobId     String?
+  source            JobSource @default(INTERNAL)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  requisition       JobRequisition @relation(fields: [requisitionId], references: [id])
+  applications      Application[]
+
+  @@map("job_postings")
+}
+
+enum JobSource {
+  INTERNAL
+  LINKEDIN
+  INDEED
+  GLASSDOOR
+  REFERRAL
+  OTHER
+}
+
+// Candidate Management
+model Candidate {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  firstName         String
+  lastName          String
+  phone             String?
+  location          String?
+  currentCompany    String?
+  currentTitle      String?
+  experience        Int? // years
+  linkedinUrl       String?
+  githubUrl         String?
+  portfolioUrl      String?
+  resumeUrl         String?
+  coverLetterUrl    String?
+  source            CandidateSource @default(INTERNAL)
+  status            CandidateStatus @default(APPLIED)
+  stage             CandidateStage @default(APPLIED)
+  isActive          Boolean  @default(true)
+  tags              String[] // Array of tags
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  applications      Application[]
+  skills            CandidateSkill[]
+  assessments       Assessment[]
+  interviews        Interview[]
+  notes             CandidateNote[]
+  documents         Document[]
+  timeTracking      TimeTracking[]
+
+  @@map("candidates")
+}
+
+enum CandidateSource {
+  INTERNAL
+  LINKEDIN
+  INDEED
+  REFERRAL
+  COLD_OUTREACH
+  JOB_FAIR
+  UNIVERSITY
+  OTHER
+}
+
+enum CandidateStatus {
+  APPLIED
+  SCREENING
+  INTERVIEWING
+  SHORTLISTED
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+  ON_HOLD
+}
+
+enum CandidateStage {
+  APPLIED
+  SCREENED
+  PHONE_SCREEN
+  TECHNICAL_INTERVIEW
+  FINAL_INTERVIEW
+  REFERENCE_CHECK
+  OFFER_SENT
+  HIRED
+  REJECTED
+}
+
+// Skills
+model Skill {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  category          SkillCategory
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  candidateSkills   CandidateSkill[]
+  jobSkills         JobSkill[]
+
+  @@map("skills")
+}
+
+enum SkillCategory {
+  PROGRAMMING_LANGUAGE
+  FRAMEWORK
+  DATABASE
+  TOOL
+  SOFT_SKILL
+  CERTIFICATION
+  OTHER
+}
+
+model CandidateSkill {
+  id                String   @id @default(cuid())
+  candidateId       String
+  skillId           String
+  proficiency       ProficiencyLevel @default(BEGINNER)
+  yearsOfExperience Int?
+  isVerified        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  skill             Skill @relation(fields: [skillId], references: [id])
+
+  @@unique([candidateId, skillId])
+  @@map("candidate_skills")
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+// Applications
+model Application {
+  id                String   @id @default(cuid())
+  candidateId       String
+  jobPostingId      String
+  status            ApplicationStatus @default(APPLIED)
+  appliedAt         DateTime @default(now())
+  reviewedAt        DateTime?
+  shortlistedAt     DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  jobPosting        JobPosting @relation(fields: [jobPostingId], references: [id])
+
+  @@unique([candidateId, jobPostingId])
+  @@map("applications")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  REVIEWING
+  SHORTLISTED
+  INTERVIEWING
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+// Assessments
+model Assessment {
+  id                String   @id @default(cuid())
+  candidateId       String
+  type              AssessmentType
+  platform          AssessmentPlatform
+  externalId        String?
+  title             String
+  description       String?
+  score             Decimal?
+  maxScore          Decimal?
+  status            AssessmentStatus @default(PENDING)
+  assignedAt        DateTime @default(now())
+  completedAt       DateTime?
+  dueDate           DateTime?
+  results           Json? // Store detailed results
+  feedback          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+
+  @@map("assessments")
+}
+
+enum AssessmentType {
+  TECHNICAL_TEST
+  CODING_CHALLENGE
+  PERSONALITY_TEST
+  SKILL_ASSESSMENT
+  CASE_STUDY
+  PRESENTATION
+  OTHER
+}
+
+enum AssessmentPlatform {
+  HACKERRANK
+  LEETCODE
+  CODERPAD
+  CUSTOM
+  OTHER
+}
+
+enum AssessmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+// Interviews
+model Interview {
+  id                String   @id @default(cuid())
+  candidateId       String
+  interviewerId     String
+  type              InterviewType
+  stage             InterviewStage
+  scheduledAt       DateTime
+  duration          Int // minutes
+  location          String? // URL for virtual interviews
+  status            InterviewStatus @default(SCHEDULED)
+  notes             String?
+  feedback          String?
+  rating             Int? // 1-5 scale
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  interviewer       User @relation(fields: [interviewerId], references: [id])
+
+  @@map("interviews")
+}
+
+enum InterviewType {
+  PHONE_SCREEN
+  TECHNICAL
+  BEHAVIORAL
+  FINAL
+  REFERENCE
+  OTHER
+}
+
+enum InterviewStage {
+  FIRST_ROUND
+  SECOND_ROUND
+  FINAL_ROUND
+  REFERENCE_CHECK
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// Documents
+model Document {
+  id                String   @id @default(cuid())
+  candidateId       String
+  type              DocumentType
+  name              String
+  url               String
+  size              Int
+  mimeType          String
+  uploadedAt        DateTime @default(now())
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+
+  @@map("documents")
+}
+
+enum DocumentType {
+  RESUME
+  COVER_LETTER
+  CERTIFICATE
+  PORTFOLIO
+  REFERENCE_LETTER
+  OTHER
+}
+
+// Notes and Feedback
+model CandidateNote {
+  id                String   @id @default(cuid())
+  candidateId       String
+  userId            String
+  type              NoteType
+  title             String
+  content           String
+  isPrivate         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  user              User @relation(fields: [userId], references: [id])
+
+  @@map("candidate_notes")
+}
+
+enum NoteType {
+  GENERAL
+  INTERVIEW_FEEDBACK
+  SCREENING_NOTES
+  REFERENCE_CHECK
+  OFFER_NEGOTIATION
+  OTHER
+}
+
+// Time Tracking
+model TimeTracking {
+  id                String   @id @default(cuid())
+  userId            String
+  candidateId       String?
+  activity          String
+  description       String?
+  startTime         DateTime
+  endTime           DateTime?
+  duration          Int? // minutes
+  source            SourcingChannel?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user              User @relation(fields: [userId], references: [id])
+  candidate         Candidate? @relation(fields: [candidateId], references: [id])
+
+  @@map("time_tracking")
+}
+
+enum SourcingChannel {
+  LINKEDIN
+  INDEED
+  GLASSDOOR
+  REFERRAL
+  COLD_OUTREACH
+  JOB_FAIR
+  UNIVERSITY
+  OTHER
+}
+
+// Job Skills (for job requirements)
+model JobSkill {
+  id                String   @id @default(cuid())
+  requisitionId     String
+  skillId           String
+  isRequired        Boolean  @default(true)
+  priority          Int @default(1)
+  createdAt         DateTime @default(now())
+
+  // Relations
+  requisition       JobRequisition @relation(fields: [requisitionId], references: [id])
+  skill             Skill @relation(fields: [skillId], references: [id])
+
+  @@unique([requisitionId, skillId])
+  @@map("job_skills")
+}
+
+// Email Templates
+model EmailTemplate {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  subject           String
+  body              String
+  type              EmailTemplateType
+  isActive          Boolean  @default(true)
+  variables         String[] // Array of template variables
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+enum EmailTemplateType {
+  INTERVIEW_INVITATION
+  REJECTION_LETTER
+  OFFER_LETTER
+  ONBOARDING_WELCOME
+  ASSESSMENT_INVITATION
+  REFERENCE_REQUEST
+  OTHER
+}
+
+// Analytics and Reporting
+model AnalyticsEvent {
+  id                String   @id @default(cuid())
+  eventType         String
+  userId            String?
+  candidateId       String?
+  requisitionId     String?
+  data              Json
+  timestamp         DateTime @default(now())
+
+  @@map("analytics_events")
+}
